@@ -1,2 +1,3 @@
-# ceph-mon
-Messing around with Ceph Mon
+# Ceph Mon experiments
+
+Messing around with Ceph Mon.

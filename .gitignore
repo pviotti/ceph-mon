@@ -26,3 +26,7 @@
 *.exe
 *.out
 *.app
+
+# LateX files
+*.aux
+*.log
