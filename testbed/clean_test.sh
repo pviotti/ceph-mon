@@ -1,3 +1,3 @@
 #!/bin/bash
 
-rm -rf test/*
+rm -rf test

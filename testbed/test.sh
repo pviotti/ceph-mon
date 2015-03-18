@@ -11,7 +11,7 @@ cat > test/conf <<EOF
 [global]
 pid file = $cwd/\$name.pid
 log file = $cwd/\$cluster-\$name.log
-run dir = $cwd/ceph
+run dir = $cwd
 
 [mon]
 admin socket = $cwd/\$cluster-\$name.asok
@@ -19,7 +19,7 @@ admin socket = $cwd/\$cluster-\$name.asok
 
 debug mon = 5
 debug paxos = 20
-debug auth = 1
+debug auth = 0
 EOF
 
 cd test
