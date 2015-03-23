@@ -1,3 +1,37 @@
+g++ -MM -H -I . ceph_mon.cc
+to get all header dependencies and the instructions to put in the makefile 
+
+ceph --admin-daemon ceph-mon.a.asok help
+
+ceph --admin-daemon ceph-mon.a.asok mon_status
+
+ceph -c test/conf --monmap test/mm -k test/keyring tell mon.a status
+
+ceph -c test/conf --monmap test/mm -k test/keyring tell mon.a mon_status
+
+
+http://ceph.com/docs/master/rados/operations/monitoring/
+
+./configure --with-debug --without-tcmalloc
+make-j4
+
+http://tracker.ceph.com/issues/9799
+
+primitive operation or
+compound transaction.
+
+https://wiki.ceph.com/Guides/Quick_Bites/10_Commands_Every_Ceph_Administrator_Should_Know
+
+http://wiki.ceph.com/FAQs/Can_Ceph_Support_Multiple_Data_Centers%3F
+
+
+http://wiki.ceph.com/Development/Wireshark_Dissector
+
+
+
+prove hybris with https://en.wikipedia.org/wiki/Java_Modeling_Language
+
+
 [Monitor configuration](http://ceph.com/docs/master/rados/configuration/mon-config-ref/)
 -----------------------
 

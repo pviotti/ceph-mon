@@ -39,8 +39,8 @@ ceph-mon -c conf -i c --mkfs --monmap mm --mon-data $cwd/mon.c -k keyring
 
 # -d for debugging and going foreground
 ceph-mon -c conf -i a --mon-data $cwd/mon.a
-ceph-mon -c conf -i c --mon-data $cwd/mon.b
-ceph-mon -c conf -i b --mon-data $cwd/mon.c
+ceph-mon -c conf -i b --mon-data $cwd/mon.b
+ceph-mon -c conf -i c --mon-data $cwd/mon.c
 
 ceph -f json-pretty -c conf -k keyring --monmap mm mon_status
 
