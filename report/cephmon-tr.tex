@@ -6,6 +6,17 @@
 \usepackage{hyperref}
 \usepackage{graphicx}
 \usepackage{caption}
+\usepackage{xspace}
+\usepackage{xcolor,soul}
+
+\definecolor{light-gray}{gray}{0.850}
+
+\newcommand{\hlc}[2][yellow]{\sethlcolor{#1}\hl{#2}}
+\newcommand{\class}[1]{\xspace{\small\hlc[light-gray]{\texttt{#1}}}\xspace}
+\newcommand{\struct}[1]{\xspace{\small\hlc[light-gray]{\textsl{#1}}}\xspace}
+
+\renewcommand{\arraystretch}{1.5} % space between table rows
+
 \title{Ceph Mon: a technical overview}
 \author{Paolo VIOTTI}
 \date{\today}
@@ -63,12 +74,43 @@ The Ceph cluster consists of different components, running as distributed daemon
     compatible with Amazon S3 or OpenStack Swift APIs.
 \end{itemize}
 
+The rest of this document focuses on the monitor component, starting from its high-level architecture,
+deep down to the implementation details present, to date, in its C++ codebase \cite{ceph-code}.
+To marry the need for this 1000 ft. view with the requirement of presenting the related 
+low level features, in the following sections informal functional descriptions may be presented beside
+the name of their main corresponding entities in the code (e.g. \class{classes} or \struct{data structures}).
+Most of the code required to run the monitor is contained in the \texttt{src/mon} directory of the repository  \cite{ceph-code}
+($\sim$34k LOC), although it shares with the rest of the codebase few functions and classes related to
+specific parts of the system (e.g. OSD or MDS daemons, respectively in \texttt{src/osd} and \texttt{src/mds}),
+or networking, logging and other basic facilities.
+
 \section{Ceph Mon}
+A Ceph Monitor maintains a set of structured information about the cluster state, including:
 
-During runtime operations, Ceph OSD Daemons check up on other Ceph OSD Daemons and report their findings to the Ceph Monitor. You do not have to provide any settings.
+\begin{itemize}
+	\item the monitor map - \class{MonMap}
+	\item the OSD map - \class{OSDMap}
+	\item the Placement Group (PG) map - \class{PGMap}
+	\item the MDS map - \class{MDSMap}.
+\end{itemize}
 
+Additionally, information about authorization and capabilities granted to users over the 
+different components of the system is maintained. 
+Besides, Ceph holds a history, as a sequence of \textit{epochs}, of each state change in the maps.
+All these information are replicated across the ceph-mon instances - 
+which are, for example, 3 or 5, deployed on different machines.
+Each monitor replica keeps its data strongly consistent using an implementation of the 
+Paxos consensus algorithm (\class{Paxos}).
 
 \subsection{Architecture}
+
+As illustrated in Fig. \ref{fig:monarch}, the Ceph monitor is composed by several sub-monitors which 
+oversee different aspects of the cluster.
+All these monitors refer to a unique instance of Paxos\footnote{This was not true before v0.58,
+see: \url{http://ceph.com/dev-notes/cephs-new-monitor-changes/}}
+in order to establish a total order between possibly concurrent operations and achieve strong consistency.
+Thus, Paxos is agnostic of any semantic associated with the updates it helps ordering, as in fact
+it just delivers blobs (i.e. \struct{bufferlist} as payload of \class{Message}).
 
 \begin{center}
 	\includegraphics[scale=0.50]{figs/ceph-mon-arch.png}
@@ -76,12 +118,83 @@ During runtime operations, Ceph OSD Daemons check up on other Ceph OSD Daemons a
 	\label{fig:monarch}
 \end{center}
 
-
-
 \subsection{Code}
+
+Table \ref{tab:class} shows an incomplete list of classes involved in the functioning of the monitor.
+To each class is
+
+\begin{center}
+	\begin{tabular}{l|p{6cm}|p{5cm}}
+		Entity & Purpose & Data and attributes \\ \hline
+		\texttt{ceph\_mon.cc} & main entry point for monitor daemon and batch commands & - \\
+		\class{Monitor} & 
+		
+		the main Monitor class 
+		\begin{itemize}
+		\item holds and start \class{Paxos}, 
+		                 \class{MonitorDB}, \class{Messenger} and all the sub-monitors
+		                 (\class{*Monitor}) 
+        \item dispatch messages coming from \class{Messenger} to the sub-monitors 
+        \end{itemize}		                 
+		                 
+		                 & 
+		                \class{MonMap}, \class{KeyServer}, \class{KeyRing}, \class{Paxos},
+		                \class{MonitorDBStore}\\
+		%${41} & ${42} & ${43} \\\\
+		%${51} & ${52} & ${53} \\\\
+		%${61} & ${62} & ${63} \\\\
+		%${71} & ${72} & ${73} \\\\
+		%${81} & ${82} & ${83} \\\\
+		%${91} & ${92} & ${93} \\\\
+		%${101} & ${102} & ${103} \\\\
+	\end{tabular}
+	\captionof{table}{Main classes used by Ceph Monitor}
+	\label{tab:class}
+\end{center}
+
+%During runtime operations, Ceph OSD Daemons check up on other Ceph OSD Daemons and report their findings to the Ceph Monitor.
+
+monitor states
+
+
+
+\begin{itemize}
+
+\item \textit{probing}:
+\item \textit{synchronizing}:
+\item \textit{electing}:
+\item \textit{leader}:
+\item \textit{peon}:
+\item \textit{shutdown}:
+
+
+
+
+\begin{center}
+	\includegraphics[scale=0.50]{figs/class_dia.pdf}
+	\captionof{figure}{Ceph Monitor classes}
+	\label{fig:monclass}
+\end{center}
+
+
+\subsection{Paxos}
+
+Paxos states:
+
+
+Paxos transitions
 
 
 \subsection{Additional notes}
+
+\begin{verbatim}
+To ask / understand:
+ 
+ - MonitorStore.{h,cc} never used
+ - difference between MonCommands and DumplingMonCommands?
+
+
+\end{verbatim}
 
 
 \begin{thebibliography}{1}
@@ -90,6 +203,8 @@ During runtime operations, Ceph OSD Daemons check up on other Ceph OSD Daemons a
 
   \bibitem{ceph-openstack} OpenStack User Survey Insights: November 2014. \\
   \url{http://perma.cc/367D-G5YN} 
+  
+  \bibitem{ceph-code} Ceph source code. \url{https://github.com/ceph/ceph} 
 
   %\bibitem{fo} Bob Tadashi Wakabayashi {\em Anti-Foreignism and Western
   %Learning in Early-Modern Japan} 1986: Harvard University Press.
