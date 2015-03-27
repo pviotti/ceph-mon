@@ -13,6 +13,8 @@
 \usepackage{listings}
 \usepackage{alltt}
 
+\usepackage{ulem} % makes underline span several lines
+
 \definecolor{light-gray}{gray}{0.850}
 
 \newcommand{\hlc}[2][yellow]{\sethlcolor{#1}\hl{#2}}
@@ -261,6 +263,7 @@ according to a configuration paramenter.
 The state diagram shown in Figure \ref{fig:paxosstate} presents the states Ceph's Paxos can assume 
 and their transitions.
 We note that not every state is achievable by peons - states marked in blue are assumed only by the leader.
+Several callback functions are used by \c{PaxosService}s to be notified of \c{Paxos} state changes.
 
 \begin{center}
 	\includegraphics[scale=0.50]{figs/paxos_dia.pdf}
@@ -299,12 +302,19 @@ phase to reach out to other monitors.
 As soon as the \c{Monitor} collects enough probe replies, it spawn a Paxos election
 using \c{Elector}.
 
-Finally, the Paxos instance can be \textit{readble} or \textit{writable} by its local services.
+The Paxos instance can be \textit{readble} or \textit{writable} by its local services.
 Paxos versions are not readable when electing, when it has not committed values
 or the lease is currently not valid.
 Paxos is writable when it is leader, it has a valid lease and it is in the \textit{active} state.
 
-Several callback functions are used by \c{PaxosService}s to be notified of \c{Paxos} state changes.
+Finally, the \textit{leases} implemented in Ceph's Paxos are intended to ensure that clients and \c{PaxosService}s
+are bound to read fresh information from local replicas.
+As reported in the official Ceph documentation \cite{ceph-mon-clock}, 
+it is important to remark that leases and, more generally, 
+\uline{the correctness of the whole Paxos implementation 
+depends on the synchronization of clocks} of
+the machines hosting the monitor replicas.
+Thus, using tools such as NTP is necessary to \textit{minimize} the chances of incorrect behaviour.
 
 \subsection{Additional notes}
 
@@ -324,6 +334,7 @@ To ask / understand:
     not ACTIVE straightaway
 \end{verbatim}
 
+\clearpage
 
 \begin{thebibliography}{1}
 
@@ -336,7 +347,11 @@ To ask / understand:
   
   \bibitem{ceph-paxos1} Ceph's new monitor changes. \url{http://ceph.com/dev-notes/cephs-new-monitor-changes/} - March 7th, 2013
   
-  \bibitem{ceph-paxos2} Monitors and Paxos, a chat with Joao. \url{http://ceph.com/community/monitors-and-paxos-a-chat-with-joao/} - September 10th, 2013
+  \bibitem{ceph-paxos2} Monitors and Paxos, a chat with Joao. 
+    \url{http://ceph.com/community/monitors-and-paxos-a-chat-with-joao/} - September 10th, 2013
+  
+  \bibitem{ceph-mon-clock} Monitor issues and wall clock skews. 
+  \url{http://ceph.com/docs/master/rados/troubleshooting/troubleshooting-mon/#clock-skews}
 
   %\bibitem{fo} Bob Tadashi Wakabayashi {\em Anti-Foreignism and Western
   %Learning in Early-Modern Japan} 1986: Harvard University Press.
