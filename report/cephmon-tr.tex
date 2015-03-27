@@ -50,7 +50,7 @@
 }
 
 \title{Ceph Mon: a technical overview}
-\author{Paolo VIOTTI}
+\author{Paolo VIOTTI\\EURECOM}
 \date{\today}
 \ifpdf
 \hypersetup{
@@ -120,9 +120,9 @@ or networking, logging and other basic facilities.
 A Ceph Monitor maintains a set of structured information about the cluster state, including:
 
 \begin{itemize}
-	\item the monitor map - \c{MonMap}
-	\item the OSD map - \c{OSDMap}
-	\item the Placement Group (PG) map - \c{PGMap}
+	\item the monitor map - \c{MonMap};
+	\item the OSD map - \c{OSDMap};
+	\item the Placement Group (PG) map - \c{PGMap};
 	\item the MDS map - \c{MDSMap}.
 \end{itemize}
 
@@ -175,7 +175,7 @@ general functioning of the monitor as explained in the following list.
 
 \begin{itemize}
 	\item[\c{Messenger}] in charge of the network communications with other parties;
-	\item[\c{KeyRing} and \c{KeyServer}] manage keying material for authorization;
+	\item[\c{KeyRing}, \c{KeyServer}] manage keying material for authorization;
 	\item[\c{MonitorDBStore}] manages the local database (i.e. LevelDB) which stores maps and cryptographic material;
 	\item[\c{Paxos}] Paxos implementation;
 	\item[\c{Elector}] used only to maintain the local state during elections.
@@ -258,12 +258,53 @@ As mentioned before, values are binary blocks opaque to Paxos.
 A trimming mechanism guarantees that the number of Paxos states kept in the local databases is limited
 according to a configuration paramenter.
 
+The state diagram shown in Figure \ref{fig:paxosstate} presents the states Ceph's Paxos can assume 
+and their transitions.
+We note that not every state is achievable by peons - states marked in blue are assumed only by the leader.
 
-The state diagram shown in Figure XXX presents the states Ceph's Paxos can assume and their transitions.
+\begin{center}
+	\includegraphics[scale=0.50]{figs/paxos_dia.pdf}
+	\captionof{figure}{Ceph's Paxos state diagram. \\Blue states can be achieved only by the leader.}
+	\label{fig:paxosstate}
+\end{center}
 
+In Figure \ref{fig:paxosseq} we show the sequence diagram of an ideal Ceph's Paxos execution.
+The \texttt{do\_refresh()} function is supposed to let local \c{PaxosService}s
+know of the new operations just committed.
 
+The so-called \textit{collect} phase can be mapped onto the original Paxos' \textit{prepare} phase.
+In this phase the leader will generate a proposal number, taking the old proposal numbers into consideration, 
+and it will send it to a quorum, along with its first and last committed versions.
+By sending these information in a message to the quorum, it expects to
+obtain acceptances from a majority, allowing it to proceed, 
+or be informed of a higher proposal number known by one or more of the Peons in the quorum.
+In fact, if a peon replies with a higher proposal number, the leader will have to abort the current
+proposal in order to retry with the proposal number specified by the peon.
+%(It may also occur that the Peon replied with a lower proposal number, in
+%which case the leader assumes it is a reply to an an older value and we'll simply drop it.)
+The leader will also check if peons replied with accepted but
+yet uncommitted values. In that case, if its version is higher than leader's
+last committed value by one, the leader assumes that the peons knows a value from a
+previous proposal that has never been committed, so it tries to commit that value by proposing it next.
 
+\begin{center}
+	\includegraphics[scale=0.60]{figs/paxos_seq.pdf}
+	\captionof{figure}{Sequence diagram of an ideal execution of Ceph's Paxos.}
+	\label{fig:paxosseq}
+\end{center}
 
+In general, when a timeout is triggered at any step of the algorithm, \c{Paxos}
+cancels pending proposals and goes back to \c{Monitor} which starts a \textit{probe}
+phase to reach out to other monitors.
+As soon as the \c{Monitor} collects enough probe replies, it spawn a Paxos election
+using \c{Elector}.
+
+Finally, the Paxos instance can be \textit{readble} or \textit{writable} by its local services.
+Paxos versions are not readable when electing, when it has not committed values
+or the lease is currently not valid.
+Paxos is writable when it is leader, it has a valid lease and it is in the \textit{active} state.
+
+Several callback functions are used by \c{PaxosService}s to be notified of \c{Paxos} state changes.
 
 \subsection{Additional notes}
 
@@ -274,6 +315,13 @@ To ask / understand:
  - difference between MonCommands and DumplingMonCommands?
  - functional difference between QuorumService and PaxosService 
     (since they both contain refererences to Paxos and the Monitor)?
+ - why does Paxos need the lease to be writable?
+ - Paxos.is_writeable is never used !
+ - in Paxos.h COMMENTS ON commit_start(), commit_finish(),
+    handle_accept() and handle_last() ABOUT STATE CHANGES 
+    ARE WRONG / OBSOLETE!!
+    In fact it changes from UPDATE{PREV} to WRITING{PREV}, 
+    not ACTIVE straightaway
 \end{verbatim}
 
 
@@ -286,9 +334,9 @@ To ask / understand:
   
   \bibitem{ceph-code} Ceph source code. \url{https://github.com/ceph/ceph} 
   
-  \bibitem{ceph-paxos1} Ceph's new monitor changes. \url{http://ceph.com/dev-notes/cephs-new-monitor-changes/} March 7th, 2013
+  \bibitem{ceph-paxos1} Ceph's new monitor changes. \url{http://ceph.com/dev-notes/cephs-new-monitor-changes/} - March 7th, 2013
   
-  \bibitem{ceph-paxos2} Monitors and Paxos, a chat with Joao. \url{http://ceph.com/community/monitors-and-paxos-a-chat-with-joao/} September 10th, 2013
+  \bibitem{ceph-paxos2} Monitors and Paxos, a chat with Joao. \url{http://ceph.com/community/monitors-and-paxos-a-chat-with-joao/} - September 10th, 2013
 
   %\bibitem{fo} Bob Tadashi Wakabayashi {\em Anti-Foreignism and Western
   %Learning in Early-Modern Japan} 1986: Harvard University Press.
