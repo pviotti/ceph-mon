@@ -5,10 +5,12 @@
 \usepackage{ifpdf}
 \usepackage{hyperref}
 \usepackage{graphicx}
-\usepackage{caption}
+\usepackage[hang,small,it]{caption}
 \usepackage{xspace}
 \usepackage{comment}
 \usepackage{xcolor,soul}
+\usepackage[section]{placeins}
+\usepackage{flafter}
 
 \usepackage{listings}
 \usepackage{alltt}
@@ -75,7 +77,7 @@ i.e. the Ceph component in charge of maintaining a map of the cluster along with
 \section{Ceph: an introduction}
 Ceph \cite{ceph} is a free software storage platform that provides object, block and file storage 
 using computer clusters running on commodity hardware. 
-Since its origin as a research project around 2006, 
+Since its origin as a research project around 2006 \cite{ceph-paper-md,ceph-paper-crush,ceph-paper,ceph-paper-rados}, 
 Ceph has undergone constant and substantial development,
 thus gaining popularity which is reflected by an ever increasing adoption as storage backend in state-of-the-art
 high-end computing systems \cite{ceph-openstack}.
@@ -84,17 +86,17 @@ As illustrated in Fig. \ref{fig:stack}, Ceph exposes to application clients mult
 \begin{itemize}
 	\item a POSIX-compatible distributed file system (\textbf{Ceph FS}), built as Linux kernel module or user-space FUSE client;
 	\item a REST-based storage gateway (\textbf{RADOSGW}) compatible with OpenStack Swift and Amazon S3;
-	\item a block storage device (\textbf{RDB}) suitable for virtualization platforms making use of kernel 
-	virtualization technologies such as QEMU or KVM.
+	\item a block storage device (\textbf{RBD}) suitable for virtualization platforms making use of technologies such as QEMU or KVM.
 \end{itemize}
 
-\begin{center}
+\begin{figure}[h]
+    \centering
 	\includegraphics[scale=0.35]{figs/ceph-stack.png}
-	\captionof{figure}{Ceph application stack (courtesy of ceph.com)}
+	\caption{Ceph application stack (courtesy of ceph.com)}
 	\label{fig:stack}
-\end{center}
+\end{figure}
 
-Beside, an application developer may even hook into the low level API exposed through \textbf{librados} 
+Besides, an application developer may even hook into the low level API exposed through \textbf{librados} 
 and offered in several programming languages in order to directly connect with \textbf{RADOS} 
 (\textit{Reliable Autonomic Distributed Object Store}), i.e. the inner object storage layer
 that acts as foundation of the interfaces mentioned above.
@@ -102,14 +104,15 @@ that acts as foundation of the interfaces mentioned above.
 The Ceph cluster consists of different components, running as distributed daemons:
 \begin{itemize}
 	\item Cluster monitors (\textit{ceph-mon}, or Mon) that keep track of active and failed cluster nodes;
-	\item Metadata servers (\textit{ceph-mds}) that store the metadata of inodes and directories;
+	\item Metadata servers (\textit{ceph-mds}) that store the metadata of inodes and directories - used only by Ceph FS;
     \item Object storage devices (\textit{ceph-osd}) that actually store data on local filesystems;
     \item RESTful gateways (\textit{ceph-rgw}) that expose the object storage layer as an interface 
     compatible with Amazon S3 or OpenStack Swift APIs.
 \end{itemize}
 
 The rest of this document focuses on the monitor component, starting from its high-level architecture,
-deep down to the implementation details present, to date, in its C++ codebase \cite{ceph-code}.
+deep down to the implementation details present, in the current development version (v0.93-919-g497737a)
+of its C++ codebase \cite{ceph-code}.
 To marry the need for this 1000 ft. view with the requirement of presenting the related 
 low level features, in the following sections informal functional descriptions may be presented beside
 the name of their main corresponding entities in the code (e.g. \c{classes} or \s{data structures}).
@@ -145,29 +148,29 @@ see: \url{http://ceph.com/dev-notes/cephs-new-monitor-changes/}}
 in order to establish a total order between possibly concurrent operations and achieve strong consistency.
 The Paxos instance is agnostic of any semantic associated with the updates it helps ordering, as in fact
 it just delivers blobs (i.e. \s{bufferlist} as payload of \c{Message}).
-
-\begin{center}
-	\includegraphics[scale=0.50]{figs/ceph-mon-arch.png}
-	\captionof{figure}{Ceph Monitor high-level architecture (courtesy of ceph.com)}
+\begin{figure}[!h]
+    \centering
+	\includegraphics[scale=0.40]{figs/ceph-mon-arch.png}
+	\caption{Ceph Monitor high-level architecture (courtesy of ceph.com)}
 	\label{fig:monarch}
-\end{center}
+\end{figure}
 
 \subsection{Implementation details}
 
 As depicted in Figure \ref{fig:monclass}, the \c{Monitor} object acts as container and coordinator of different objects.
-
-\begin{center}
+\begin{figure}[h]
+    \centering
 	\includegraphics[scale=0.50]{figs/class_dia.pdf}
-	\captionof{figure}{Ceph Monitor classes}
+	\caption{Ceph Monitor classes}
 	\label{fig:monclass}
-\end{center}
+\end{figure}
 
 Some of them inherit from a common parent class named \c{QuorumService}.
 In particular, \c{HealthMonitor} holds a reference to \c{DataHealthService}, 
 which is in turn child class of \c{HealthService}.
-\c{DataHealthService} is responsible of periodically sharing with other quorum members
-or presenting to the admin user some statistics about general cluster health.
-\c{KeyConfigService} is another subclass of \c{QuorumService} which uses \c{Paxos}
+\c{DataHealthService} is responsible of presenting to the admin user 
+some statistics about general cluster health.
+\c{ConfigKeyService} is another subclass of \c{QuorumService} which uses \c{Paxos}
 in order to propagate to the monitor cluster members 
 the addition or removal of cryptographic material to the local store.
 
@@ -222,21 +225,30 @@ To each class is
 \end{comment}
 
 %During runtime operations, Ceph OSD Daemons check up on other Ceph OSD Daemons and report their findings to the Ceph Monitor.
+\FloatBarrier
 
-The monitor can assume the following states during an execution:
-\begin{itemize} \itemsep1pt
+As depicted in Figure \ref{fig:monstate}, the monitor can assume the following states during an execution:
+\begin{itemize} %\itemsep1pt
 \item \textit{probing}: initial and bootstrap phase state;
-\item \textit{synchronizing}: used when synchronizing the state due to significant drifting from leader's replica;
+\item \textit{synchronizing}: used when synchronizing the Paxos state due to significant drifting from leader's replica;
 \item \textit{electing}: assumed when starting or joining a Paxos election;
 \item \textit{leader}: the monitor is active and leader in the Paxos quorum; 
 \item \textit{peon}: the monitor is active and follower in the Paxos quorum;
 \item \textit{shutdown}: when shutdown process is ongoing.
 \end{itemize}
 
+\begin{figure}[!h]
+    \centering
+	\includegraphics[scale=0.50]{figs/monitor_states.pdf}
+	\captionof{figure}{Ceph Monitor state diagram.}
+	\label{fig:monstate}
+\end{figure}
+\FloatBarrier
+
 
 \subsection{Paxos}
-The \c{Paxos} class implements the Paxos algorithm in order to guarantee agreement over the ordering of changes performed 
-on Ceph maps.
+The \c{Paxos} class ($\sim$2.9k LOC) implements the Paxos algorithm in order 
+to guarantee agreement over the ordering of changes performed on Ceph maps.
 Apart from a couple of online informal or incomplete documents \cite{ceph-paxos1,ceph-paxos2}, 
 the only reliable source of documentation available about this Paxos implementation is contained
 in the comments of the Paxos class and header files.
@@ -249,7 +261,7 @@ This libary is based on the Paxos algorithm, but varies in a few key ways:
  1- Only a single new value is generated at a time, 
     simplifying the recovery logic.
  2- Nodes track "committed" values, 
-    {\em and share them generously (and trustingly)}
+    and share them generously (and trustingly)
  3- A 'leasing' mechanism is built-in, allowing nodes to determine 
     when it is safe to "read" their copy of the last committed value.
 \end{alltt}
@@ -263,13 +275,14 @@ according to a configuration paramenter.
 The state diagram shown in Figure \ref{fig:paxosstate} presents the states Ceph's Paxos can assume 
 and their transitions.
 We note that not every state is achievable by peons - states marked in blue are assumed only by the leader.
-Several callback functions are used by \c{PaxosService}s to be notified of \c{Paxos} state changes.
-
-\begin{center}
-	\includegraphics[scale=0.50]{figs/paxos_dia.pdf}
-	\captionof{figure}{Ceph's Paxos state diagram. \\Blue states can be achieved only by the leader.}
+Several callback functions are used by \c{PaxosService} to be notified of \c{Paxos} state changes.
+\begin{figure}[!h]
+    \centering
+	\includegraphics[scale=0.45]{figs/paxos_dia.pdf}
+	\caption{Ceph's Paxos state diagram. \\Blue states can be achieved only by the leader.}
 	\label{fig:paxosstate}
-\end{center}
+\end{figure}
+\FloatBarrier
 
 In Figure \ref{fig:paxosseq} we show the sequence diagram of an ideal Ceph's Paxos execution.
 The \texttt{do\_refresh()} function is supposed to let local \c{PaxosService}s
@@ -290,11 +303,13 @@ yet uncommitted values. In that case, if its version is higher than leader's
 last committed value by one, the leader assumes that the peons knows a value from a
 previous proposal that has never been committed, so it tries to commit that value by proposing it next.
 
-\begin{center}
-	\includegraphics[scale=0.60]{figs/paxos_seq.pdf}
+\begin{figure}[!h]
+    \centering
+	\includegraphics[scale=0.50]{figs/paxos_seq.pdf}
 	\captionof{figure}{Sequence diagram of an ideal execution of Ceph's Paxos.}
 	\label{fig:paxosseq}
-\end{center}
+\end{figure}
+\FloatBarrier
 
 In general, when a timeout is triggered at any step of the algorithm, \c{Paxos}
 cancels pending proposals and goes back to \c{Monitor} which starts a \textit{probe}
@@ -302,18 +317,22 @@ phase to reach out to other monitors.
 As soon as the \c{Monitor} collects enough probe replies, it spawn a Paxos election
 using \c{Elector}.
 
-The Paxos instance can be \textit{readble} or \textit{writable} by its local services.
+Paxos proposals are submitted either by the administrative clients (from command line) 
+or by the Paxos Services, which in turn receive updates from other entities of the cluster.
+Each Paxos instance can be \textit{readble} or \textit{writable} by its local services.
 Paxos versions are not readable when electing, when it has not committed values
-or the lease is currently not valid.
+or when the lease is not valid.
 Paxos is writable when it is leader, it has a valid lease and it is in the \textit{active} state.
-
-Finally, the \textit{leases} implemented in Ceph's Paxos are intended to ensure that clients and \c{PaxosService}s
+In essence, reads are performed on the local replica (be it the leader or a peon) as long as it has a valid lease. 
+If it does not, a callback is set to execute the read action as soon as the it becomes readable.
+So, the \textit{leases} implemented in Ceph's Paxos are intended to ensure that clients and \c{PaxosService}
 are bound to read fresh information from local replicas.
+Leases extensions are granted by the leader at each successful commit, or, in absence of commits, 
+upon a specific timeout expiration.
 As reported in the official Ceph documentation \cite{ceph-mon-clock}, 
 it is important to remark that leases and, more generally, 
 \uline{the correctness of the whole Paxos implementation 
-depends on the synchronization of clocks} of
-the machines hosting the monitor replicas.
+depends on the synchronization of clocks} of the machines hosting the monitor replicas.
 Thus, using tools such as NTP is necessary to \textit{minimize} the chances of incorrect behaviour.
 
 \subsection{Additional notes}
@@ -339,6 +358,18 @@ To ask / understand:
 \begin{thebibliography}{1}
 
   \bibitem{ceph} Ceph storage platform. \url{http://ceph.com/} 
+  
+  \bibitem{ceph-paper-md} S. A. Weil, K. T. Pollack, S. A. Brandt and E. L. Miller. Dynamic Metadata Management for Petabyte-Scale File Systems.
+  In \textit{Proceedings of the 2004 ACM/IEEE Conference on Supercomputing (SC)}, Pittsburgh, PA, Nov. 2004. ACM.
+
+  \bibitem{ceph-paper-crush} S. A. Weil, S. A. Brandt, E. L. Miller, and C. Maltzahn. CRUSH: Controlled, scalable, decentralized placement of replicated data. 
+  In \textit{Proceedings of the 2006 ACM/IEEE Conference on Supercomputing (SC)}, Tampa, FL, Nov. 2006. ACM.
+
+  \bibitem{ceph-paper} S. A. Weil, S. A. Brandt, E. L. Miller, D. D. E. Long, and C. Maltzahn. Ceph: A scalable, high-performance distributed file system. 
+  In \textit{Proceedings of the 7th Symposium on Operating Systems Design and Implementation (OSDI)}, Seattle, WA, Nov. 2006. USENIX.
+	
+  \bibitem{ceph-paper-rados} S. A. Weil, A. W. Leung, S. A. Brandt, and C. Maltzahn. RADOS: a scalable, reliable storage service for petabyte-scale storage clusters. 
+  In \textit{Proceedings of the 2nd international workshop on Petascale data storage: held in conjunction with Supercomputing ’07, PDSW ’07},  pages 35–44, New York, NY, USA, 2007. ACM.
 
   \bibitem{ceph-openstack} OpenStack User Survey Insights: November 2014. \\
   \url{http://perma.cc/367D-G5YN} 
