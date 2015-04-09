@@ -12,7 +12,7 @@ ceph -c test/conf --monmap test/mm -k test/keyring tell mon.a mon_status
 
 http://ceph.com/docs/master/rados/operations/monitoring/
 
-./configure --with-debug --without-tcmalloc
+./configure --with-debug --without-tcmalloc --disable-static CC='ccache gcc' CXX='ccache g++' CFLAGS="-Wall -g" CXXFLAGS="-Wall -g"
 make-j4
 
 http://tracker.ceph.com/issues/9799

@@ -250,8 +250,8 @@ As depicted in Figure \ref{fig:monstate}, the monitor can assume the following s
 The \c{Paxos} class ($\sim$2.9k LOC) implements the Paxos algorithm in order 
 to guarantee agreement over the ordering of changes performed on Ceph maps.
 Apart from a couple of online informal or incomplete documents \cite{ceph-paxos1,ceph-paxos2}, 
-the only reliable source of documentation available about this Paxos implementation is contained
-in the comments of the Paxos class and header files.
+the richest source of documentation available about this Paxos implementation is contained
+in the numerous comments of the Paxos class and header files.
 In particular, there is included the following excerpt, which reports about the difference between the Paxos algorithms
 and this practical implementation.
 
@@ -346,9 +346,11 @@ To ask / understand:
     (since they both contain refererences to Paxos and the Monitor)?
  - why does Paxos need the lease to be writable?
  - Paxos.is_writeable is never used !
+ - WRITING-UPDATE_PREV states: are they really necessary?
+ - (peons do refresh but never assume the refresh state)
  - in Paxos.h COMMENTS ON commit_start(), commit_finish(),
     handle_accept() and handle_last() ABOUT STATE CHANGES 
-    ARE WRONG / OBSOLETE!!
+    ARE WRONG / OBSOLETE !
     In fact it changes from UPDATE{PREV} to WRITING{PREV}, 
     not ACTIVE straightaway
 \end{verbatim}
