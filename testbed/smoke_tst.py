@@ -22,10 +22,11 @@ test_db = {}
 def test():
     print("Ceph MON KVS smoke test -", num_write, "keys")
     tst_set()
-    #time.sleep(5) # XXX
+    #time.sleep(5)
     tst_get()
     tst_list()
     tst_delete()
+    tst_writeread()
     print("OK.")
 
 def tst_set():
@@ -65,7 +66,7 @@ def tst_delete():
         _print("R:" + str(ret))
         assert ret == b'A'
 
-        #time.sleep(1)  # XXX
+        #time.sleep(1)
         while True:
             cmd = "G " + key
             _print(cmd)
@@ -75,6 +76,23 @@ def tst_delete():
                 break
             else:
                 print("DELETE NOT YET APPLIED, LINEARIZABILITY FAULT !!!")
+
+def tst_writeread():
+    for i in range(1, num_write+1):
+        key = ''.join(random.choice(string.ascii_letters) for i in range(key_len))
+        value = random.randint(0,max_value)
+        cmd = "S " + key + " " + str(value)
+        _print(cmd)
+        ret = _send_recv(random.choice(servers), cmd)
+        assert ret == b'A'
+        _print("R: " + str(ret))
+        
+        cmd = "G " + key
+        _print(cmd)
+        ret = _send_recv(random.choice(servers), cmd)
+        _print("R: " + str(ret))
+        assert int(ret) == value
+        
 
 def _send_recv(host_port, cmd):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
