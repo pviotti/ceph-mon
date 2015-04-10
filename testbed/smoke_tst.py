@@ -74,7 +74,7 @@ def tst_delete():
             if ret == b'-1':
                 break
             else:
-                print("DELETE NOT YET APPLIED")
+                print("DELETE NOT YET APPLIED, LINEARIZABILITY FAULT !!!")
 
 def _send_recv(host_port, cmd):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
