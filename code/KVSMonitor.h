@@ -51,22 +51,26 @@ class ClientSession;
 
 class Database {
 public:
-  Database() { }
-  epoch_t epoch;
-  utime_t last_changed;
+  Database() : epoch(0) { }
 
   void set(std::string key, int value);
   int get(std::string key);
   std::string list();
   void del(std::string key);
 
-  void decode_and_apply_op(bufferlist::iterator &p);
+  kvs_op decode_and_apply_op(bufferlist::iterator &p);
   void encode_pending_op(bufferlist& blist);
+
+  void incr_epoch();
+  epoch_t get_epoch();
 
   kvs_op pending_op;
 private:
   std::map<std::string, int> db;
-  Lock lock;
+  Lock db_lock;
+  Lock epoch_lock;
+  epoch_t epoch;
+  utime_t last_changed;
 };
 
 class KVSMonitor: public PaxosService {
@@ -103,7 +107,6 @@ private:
   boost::thread_group tg;
 
   Database db;
-  bufferlist command_bl;
 };
 
 class ClientSession {

@@ -18,11 +18,17 @@ struct kvs_op {
   std::string key;
   int value;
 
-  kvs_op() { }
+  kvs_op() :
+    type(DEL), key(""), value(0) { }
   kvs_op(kvs_op_type t, std::string k, int v) :
       type(t), key(k), value(v) { }
   kvs_op(const kvs_op& op) :
       type(op.type), key(op.key), value(op.value) { }
+
+  bool is_nop() {
+    return type == DEL &&
+        key == "" && value == 0;
+  }
 
   std::string to_string() const {
     std::ostringstream os;
