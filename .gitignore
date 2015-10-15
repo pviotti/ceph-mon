@@ -30,3 +30,5 @@
 # LateX files
 *.aux
 *.log
+
+.svn
